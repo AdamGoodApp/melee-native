@@ -123,7 +123,11 @@ void lbFile_800164A4(int file, uintptr_t dst, size_t* size, int pri,
 {
     int type;
     *size = lbFile_8001634C(file);
+#ifdef MELEE_NATIVE
+    type = (dst >= MELEE_MAIN_MEMORY_BASE) ? 0x21 : 0x23;
+#else
     type = (dst >= 0x80000000) ? 0x21 : 0x23;
+#endif
     HSD_DevComRequest(file, 0, dst, ROUND_UP_32(*size), type, pri, callback,
                       args);
 }

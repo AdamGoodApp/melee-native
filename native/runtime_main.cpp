@@ -3,7 +3,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <unistd.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#else
 #include <execinfo.h>
+#endif
 #include "os_runtime.h"
 #include "platform_launcher.h"
 #include <dolphin/dvd.h>
@@ -13,20 +17,35 @@
 
 static std::string executable_path, disc_path;
 static bool graphical_launch;
+#ifdef __EMSCRIPTEN__
+// The page owns the worker: it terminates this one and starts a fresh game.
+EM_JS(void, melee_web_post_reset, (int mode), {
+    globalThis.postMessage({type: 'reset', mode: mode});
+});
+static void reset_game(int type) {
+    melee_web_post_reset(type);
+    std::_Exit(0);
+}
+#else
 static void reset_game(int type) {
     if (type == 2) std::exit(0);
     char* arguments[] = {executable_path.data(), graphical_launch ? nullptr : disc_path.data(), nullptr};
     execv(arguments[0], arguments);
     std::perror("Native restart failed"); std::abort();
 }
+#endif
 
 extern "C" int melee_game_main(void);
 
 static void log_message(AuroraLogLevel level, const char* module, const char* text, unsigned int length) {
     std::fprintf(stderr, "[%s] %.*s\n", module, static_cast<int>(length), text);
     if (level == LOG_FATAL) {
+#ifdef __EMSCRIPTEN__
+        emscripten_log(EM_LOG_ERROR | EM_LOG_C_STACK, "%s", "");
+#else
         void* frames[40];
         backtrace_symbols_fd(frames, backtrace(frames, 40), 2);
+#endif
         std::abort();
     }
 }
@@ -70,12 +89,14 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "[launch] Loaded GALE01 revision 2 from %s\n", disc_path.c_str());
     AuroraConfig config{};
     config.appName = "Melee Native";
-#ifdef __APPLE__
+#if defined(__EMSCRIPTEN__)
+    config.desiredBackend = BACKEND_WEBGPU;
+#elif defined(__APPLE__)
     config.desiredBackend = BACKEND_METAL;
 #else
     config.desiredBackend = BACKEND_VULKAN;
 #endif
-#ifdef __linux__
+#if defined(__linux__) || defined(__EMSCRIPTEN__)
     const auto user_path = MeleeConfigPath(), cache_path = MeleeCachePath();
     config.userPath = user_path.c_str();
     config.cachePath = cache_path.c_str();
@@ -94,8 +115,11 @@ int main(int argc, char** argv) {
         }
     }
     MeleeNativeConfigureOS(info.userPath, reset_game);
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__EMSCRIPTEN__)
+    // Saves are unsupported in graphical launches (and always on web).
     MeleeNativeSkipSavePrompt = graphical_launch;
+#endif
+#ifdef __APPLE__
     if (graphical_launch) {
         MeleeInstallAppMenu([] {
             char setup[] = "--setup";

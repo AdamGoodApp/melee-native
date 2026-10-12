@@ -10,7 +10,12 @@
 #include <fenv.h>
 #include <stdatomic.h>
 #include <limits.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#include <emscripten/stack.h>
+#else
 #include <execinfo.h>
+#endif
 
 static pthread_once_t lock_once = PTHREAD_ONCE_INIT;
 static pthread_mutex_t interrupt_lock;
@@ -31,9 +36,13 @@ void OSPanic(char* file, int line, char* format, ...) {
     fprintf(stderr, "Native game panic at %s:%d: ", file, line);
     va_list args; va_start(args, format); vfprintf(stderr, format, args); va_end(args);
     fputc('\n', stderr);
+#ifdef __EMSCRIPTEN__
+    emscripten_log(EM_LOG_ERROR | EM_LOG_C_STACK, "%s", "");
+#else
     void* frames[40];
     int count=backtrace(frames,40);
     backtrace_symbols_fd(frames,count,2);
+#endif
     abort();
 }
 static void initialize_lock(void) {
@@ -74,11 +83,22 @@ void OSSaveFPUContext(OSContext* context) {
     case FE_DOWNWARD: mode = 3; break;
     }
     context->fpscr = mode;
+    /* Targets without FP exception flags (wasm32) report none. */
+#ifdef FE_INVALID
     if (fetestexcept(FE_INVALID)) context->fpscr |= 1U << 29;
+#endif
+#ifdef FE_OVERFLOW
     if (fetestexcept(FE_OVERFLOW)) context->fpscr |= 1U << 28;
+#endif
+#ifdef FE_UNDERFLOW
     if (fetestexcept(FE_UNDERFLOW)) context->fpscr |= 1U << 27;
+#endif
+#ifdef FE_DIVBYZERO
     if (fetestexcept(FE_DIVBYZERO)) context->fpscr |= 1U << 26;
+#endif
+#ifdef FE_INEXACT
     if (fetestexcept(FE_INEXACT)) context->fpscr |= 1U << 25;
+#endif
 }
 void OSLoadFPUContext(OSContext* context) {
     const int modes[] = {FE_TONEAREST, FE_TOWARDZERO, FE_UPWARD, FE_DOWNWARD};
@@ -276,7 +296,11 @@ int OSJoinThread(OSThread* thread, void** value) {
 
 void MeleeNativeReportThreadInfo(void) {
     pthread_t thread = pthread_self();
-#ifdef __APPLE__
+#if defined(__EMSCRIPTEN__)
+    (void) thread;
+    void* top = (void*) emscripten_stack_get_base();
+    size_t size = emscripten_stack_get_base() - emscripten_stack_get_end();
+#elif defined(__APPLE__)
     void* top = pthread_get_stackaddr_np(thread);
     size_t size = pthread_get_stacksize_np(thread);
 #else

@@ -30,6 +30,11 @@ void HSD_LogInit(void)
 {
     if (native_log_stream == NULL) {
         native_log_stream = stdout;
+#if defined(__EMSCRIPTEN__)
+        /* musl declares stdout const, so the report callback cannot wrap it;
+           game output still reaches stdout directly. */
+        (void) native_report;
+#else
 #ifdef __linux__
         cookie_io_functions_t functions = { .write = native_report };
         stdout = fopencookie(NULL, "w", functions);
@@ -39,6 +44,7 @@ void HSD_LogInit(void)
         if (stdout == NULL) {
             abort();
         }
+#endif
         setvbuf(stdout, NULL, _IONBF, 0);
     }
 }

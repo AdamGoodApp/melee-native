@@ -7,7 +7,14 @@
 #include <fstream>
 #include <string>
 extern "C" void MeleeNativeSetKeyboard(u16, s8, s8, s8, s8);
+#ifdef __EMSCRIPTEN__
+#include "platform/web/web_shared.h"
+// The page publishes key state in shared memory; a changed press sequence
+// stands in for a keydown event seen since the previous sample.
+static std::array<uint8_t, MELEE_WEB_KEY_COUNT> last_seq;
+#else
 static std::array<bool, SDL_SCANCODE_COUNT> pressed;
+#endif
 static int ready_scene=-1;
 extern "C" void MeleeNativeRenderCheckScene(int);
 extern "C" void MeleeNativeMatrixScene(int);
@@ -106,17 +113,33 @@ static bool replayInput() {
     MeleeNativeSetKeyboard(buttons,x,y,cx,cy);--remaining;return true;
 }
 extern "C" void MeleeNativeKeyboardEvent(const SDL_Event* event) {
+#ifdef __EMSCRIPTEN__
+    (void)event;
+#else
     if (std::getenv("MELEE_TRACE_INPUT") && (event->type == SDL_EVENT_KEY_DOWN || event->type == SDL_EVENT_KEY_UP))
         std::fprintf(stderr, "[keyboard] %s scancode=%d\n", event->type == SDL_EVENT_KEY_DOWN ? "down" : "up", int(event->key.scancode));
     if(event->type==SDL_EVENT_KEY_DOWN && event->key.scancode>SDL_SCANCODE_UNKNOWN && event->key.scancode<SDL_SCANCODE_COUNT)
         pressed[event->key.scancode]=true;
     if(event->type==SDL_EVENT_WINDOW_FOCUS_LOST) pressed.fill(false);
+#endif
 }
 extern "C" void MeleeNativeSampleKeyboard(void) {
+#ifdef __EMSCRIPTEN__
+    auto* shared=melee_web_shared_block();
+    std::array<uint8_t, MELEE_WEB_KEY_COUNT> seq;
+    for(unsigned i=0;i<seq.size();++i) seq[i]=__atomic_load_n(&shared->key_press_seq[i],__ATOMIC_RELAXED);
+    if(replayInput()) {last_seq=seq;return;}
+    const bool focused=!(__atomic_load_n(&shared->flags,__ATOMIC_RELAXED)&MELEE_WEB_FLAG_FOCUS_LOST);
+    const auto down=[&](SDL_Scancode code) {
+        const unsigned c=unsigned(code);
+        return focused&&(((__atomic_load_n(&shared->keys_down[c>>5],__ATOMIC_RELAXED)>>(c&31))&1)||seq[c]!=last_seq[c]);
+    };
+#else
     if(replayInput()) {pressed.fill(false);return;}
     const bool* keys=SDL_GetKeyboardState(nullptr);
     const bool focused=SDL_GetKeyboardFocus()!=nullptr;
     const auto down=[&](SDL_Scancode code) {return focused&&(keys[code]||pressed[code]);};
+#endif
     u16 buttons=0;
     if(down(SDL_SCANCODE_X)) buttons|=PAD_BUTTON_A;
     if(down(SDL_SCANCODE_Z)) buttons|=PAD_BUTTON_B;
@@ -134,5 +157,9 @@ extern "C" void MeleeNativeSampleKeyboard(void) {
         80*(down(SDL_SCANCODE_W)-down(SDL_SCANCODE_S)),
         80*(down(SDL_SCANCODE_L)-down(SDL_SCANCODE_J)),
         80*(down(SDL_SCANCODE_I)-down(SDL_SCANCODE_K)));
+#ifdef __EMSCRIPTEN__
+    last_seq=seq;
+#else
     pressed.fill(false);
+#endif
 }

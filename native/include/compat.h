@@ -41,4 +41,15 @@ static inline double melee_native_frsqrte(double x) { return 1.0 / sqrt(x); }
 #define MTXLightOrtho C_MTXLightOrtho
 #define MTXLightPerspective C_MTXLightPerspective
 
+/* The game tells ARAM offsets from main-memory addresses by value: GameCube MEM1
+   is mapped at 0x80000000 and ARAM offsets stay below its 16 MiB size. 64-bit
+   hosts place every host address far above 0x80000000; wasm32 addresses are all
+   below it, so the browser build links with GLOBAL_BASE at 16 MiB and uses the
+   ARAM size as the boundary instead. */
+#ifdef __EMSCRIPTEN__
+#define MELEE_MAIN_MEMORY_BASE 0x01000000U
+#else
+#define MELEE_MAIN_MEMORY_BASE 0x80000000U
+#endif
+
 #endif

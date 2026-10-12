@@ -440,7 +440,8 @@ void AXDriver_8038C6C0(HSD_SM* v)
     }
 }
 
-static void fn_8038CC1C(void)
+/// @remark Installed as the synth's master clock callback, which passes the clock tick.
+static void fn_8038CC1C(int clock)
 {
     HSD_SM* v;
     HSD_SM* next;

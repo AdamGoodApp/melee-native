@@ -12,8 +12,9 @@ void MeleeShowLaunchError(const std::string& error);
 #endif
 void MeleePrepareAppLogging();
 
-// Linux returns XDG paths; other platforms retain Aurora defaults.
-#ifdef __linux__
+// Linux returns XDG paths and the web build MEMFS paths; other platforms
+// retain Aurora defaults.
+#if defined(__linux__) || defined(__EMSCRIPTEN__)
 std::string MeleeConfigPath();
 std::string MeleeCachePath();
 #endif

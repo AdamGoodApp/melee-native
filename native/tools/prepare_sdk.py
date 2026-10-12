@@ -38,6 +38,8 @@ for source in (root / 'extern/dolphin/include').rglob('*.h'):
             text = re.sub(r'\bCARD' + name + r'Async\b', 'MeleeNativeCARD' + name + 'Async', text)
             text = '#define CARD' + name + 'Async MeleeNativeCARD' + name + 'Async\n' + text
     if source.name == 'thp.h':
+        # Aurora's THPInit returns BOOL; wasm traps on calls through a mismatched prototype.
+        text = text.replace('void THPInit(void);', 'BOOL THPInit(void);')
         text = text.replace('s32 THPVideoDecode(', 'intptr_t MeleeNativeTHPVideoDecode(')
         text = text.replace('THPDec_80331340(s32,', 'THPDec_80331340(intptr_t,')
         text = text.replace('THPDec_803313D0(s32,', 'THPDec_803313D0(intptr_t,')

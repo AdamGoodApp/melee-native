@@ -121,7 +121,8 @@ ruby native/tools/package_app.rb build/native-app dist/local
 ```
 
 Run these commands from the repository root. Bootstrap pins Aurora to
-`749d6ee7a22bdfab78c8ece9047bca5d79aa72ca`; CMake downloads its dependencies,
+`520a3f78142af88cec26dd03baad50e16778203f` (the `melee-web` branch of the
+AdamGoodApp/aurora fork: upstream `749d6ee` plus the browser backend); CMake downloads its dependencies,
 including prebuilt Dawn and nod libraries. A network connection is required.
 Building and the asset-free component tests require no game image. Font data
 embedded in the original executable is loaded from the selected disc at runtime.

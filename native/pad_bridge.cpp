@@ -3,6 +3,9 @@
 #include <chrono>
 #include <cstring>
 #include <mutex>
+#ifdef __EMSCRIPTEN__
+#include "platform/web/web_shared.h"
+#endif
 
 namespace {
 // Keep Melee's 12-byte input ABI separate from Aurora's 16-byte extension.
@@ -32,7 +35,26 @@ extern "C" u32 MeleeNativePADRead(MeleePadStatus* output) {
     std::lock_guard lock(pad_mutex);
     auto now = std::chrono::steady_clock::now();
     if (last_sample.time_since_epoch().count() == 0 || now-last_sample >= sample_period) {
+#ifdef __EMSCRIPTEN__
+        // The page publishes gamepads in shared memory; Aurora's PADRead is idle on web.
+        auto* shared = melee_web_shared_block();
+        for (unsigned i = 0; i < 4; ++i) {
+            const MeleeWebPad& pad = shared->pads[i];
+            PADStatus& status = latest[i];
+            status = {};
+            status.button = __atomic_load_n(&pad.buttons, __ATOMIC_RELAXED);
+            status.stickX = static_cast<s8>(__atomic_load_n(&pad.stick_x, __ATOMIC_RELAXED));
+            status.stickY = static_cast<s8>(__atomic_load_n(&pad.stick_y, __ATOMIC_RELAXED));
+            status.substickX = static_cast<s8>(__atomic_load_n(&pad.cstick_x, __ATOMIC_RELAXED));
+            status.substickY = static_cast<s8>(__atomic_load_n(&pad.cstick_y, __ATOMIC_RELAXED));
+            status.triggerLeft = __atomic_load_n(&pad.trigger_l, __ATOMIC_RELAXED);
+            status.triggerRight = __atomic_load_n(&pad.trigger_r, __ATOMIC_RELAXED);
+            status.err = __atomic_load_n(&pad.connected, __ATOMIC_RELAXED) ? PAD_ERR_NONE : PAD_ERR_NO_CONTROLLER;
+        }
+        motor_mask = 0; last_sample = now;
+#else
         motor_mask = PADRead(latest.data()); last_sample = now;
+#endif
     }
     copy_to_game(output, latest.data());
     auto& player=output[0];

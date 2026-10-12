@@ -40,7 +40,13 @@ typedef struct lbArqHandle {
 #endif
 static lbArqState lbArq_80014ABC(lbArqNode* arg0)
 {
+#ifdef MELEE_NATIVE
+    /* The ARQ completion callback sets this on the ARQ host thread; an inlined
+       plain load would be hoisted out of lbArq_80014BD0's wait loop. */
+    return __atomic_load_n(&arg0->state, __ATOMIC_ACQUIRE);
+#else
     return arg0->state;
+#endif
 }
 #ifdef __MWERKS__
 #pragma pop

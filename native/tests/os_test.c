@@ -49,7 +49,8 @@ int main(void) {
     CHECK(OSJoinThread(&thread, &result) && result == &marker);
     CHECK(OSCheckActiveThreads() == 0);
     OSContext context; OSClearContext(&context); OSSetCurrentContext(&context);
-    fesetround(FE_DOWNWARD); OSSaveFPUContext(&context); CHECK((context.fpscr & 3)==3);
+    /* wasm32 has a fixed round-to-nearest mode. */
+    if (fesetround(FE_DOWNWARD) == 0 && fegetround() == FE_DOWNWARD) { OSSaveFPUContext(&context); CHECK((context.fpscr & 3)==3); }
     context.fpscr=0; OSLoadFPUContext(&context); CHECK(fegetround()==FE_TONEAREST);
     OSClearContext(&context); CHECK(OSGetCurrentContext()!=&context);
     char directory[]="/tmp/melee-os-test-XXXXXX"; CHECK(mkdtemp(directory));

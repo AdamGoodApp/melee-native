@@ -10,6 +10,9 @@
 #include <cstdio>
 #include <vector>
 #include <algorithm>
+#ifdef __EMSCRIPTEN__
+#include "platform/web/web_shared.h"
+#endif
 
 namespace {
 using Clock = std::chrono::steady_clock;
@@ -29,6 +32,15 @@ auto previous_present = Clock::now();
 std::vector<double> present_intervals;
 auto next_retrace = Clock::now();
 constexpr auto frame_period = std::chrono::nanoseconds(16666667);
+#ifdef __EMSCRIPTEN__
+// Page visibility pauses rendering; an exit request surfaces as AURORA_EXIT
+// from the next aurora_update(), reaching the existing std::exit(0) path.
+void poll_web_host() {
+    const auto flags = __atomic_load_n(&melee_web_shared_block()->flags, __ATOMIC_RELAXED);
+    aurora_emscripten_set_paused((flags & MELEE_WEB_FLAG_HIDDEN) != 0);
+    if (flags & MELEE_WEB_FLAG_EXIT_REQUESTED) aurora_emscripten_request_exit();
+}
+#endif
 }
 extern "C" {
 void MeleeNativeGameFrame(void) { ++measured_game_frames; }
@@ -51,6 +63,9 @@ VIRetraceCallback VISetPostRetraceCallback(VIRetraceCallback callback) {
     auto previous = after_retrace; after_retrace = callback; return previous;
 }
 void VIWaitForRetrace(void) {
+#ifdef __EMSCRIPTEN__
+    poll_web_host();
+#endif
     // A VI tick can occur while the game waits for input or a free XFB.
     // Keep the recording frame open until an EFB copy finishes; submitting
     // an empty Aurora frame clears the displayed image and causes a flash.
@@ -59,6 +74,9 @@ void VIWaitForRetrace(void) {
         if (black) ImGui::GetForegroundDrawList()->AddRectFilled(
             ImVec2(0,0), ImGui::GetIO().DisplaySize, IM_COL32(0,0,0,255));
         aurora_end_frame(); frame_active = false;
+#ifdef __EMSCRIPTEN__
+        __atomic_fetch_add(&melee_web_shared_block()->frame_counter, 1u, __ATOMIC_RELAXED);
+#endif
         MeleeNativeCheckFrame();
         frame_ready = false;
         presented_black = black;
@@ -86,6 +104,10 @@ void VIWaitForRetrace(void) {
     if (next_retrace < now) next_retrace = now;
     std::this_thread::sleep_until(next_retrace);
     for (;;) {
+#ifdef __EMSCRIPTEN__
+        // Re-read while waiting: begin_frame stays false until the page is visible.
+        poll_web_host();
+#endif
         for (auto event = aurora_update(); event && event->type != AURORA_NONE; ++event) {
             if (event->type == AURORA_SDL_EVENT) MeleeNativeKeyboardEvent(&event->sdl);
             if (event->type == AURORA_EXIT) { aurora_shutdown(); std::exit(0); }

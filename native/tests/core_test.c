@@ -25,8 +25,13 @@ int main(void) {
     CHECK(HSD_GetNbBits(0)==0);
     CHECK(HSD_GetNbBits(0x80000000U)==1);
     CHECK(HSD_GetNbBits(0xFFFFFFFFU)==32);
+#if UINTPTR_MAX > UINT32_MAX
     CHECK(OSRoundUp32B((uintptr_t)0x100000001ULL) == 0x100000020ULL);
     CHECK(OSRoundDown32B((uintptr_t)0x10000001FULL) == 0x100000000ULL);
+#else
+    CHECK(OSRoundUp32B((uintptr_t)0x10000001UL) == 0x10000020UL);
+    CHECK(OSRoundDown32B((uintptr_t)0x1000001FUL) == 0x10000000UL);
+#endif
     const u32 expected[] = {41, 51235, 6334, 59268, 51937, 15724};
     *seed_ptr = 1;
     for (unsigned i = 0; i < sizeof(expected)/sizeof(*expected); ++i)
@@ -36,7 +41,9 @@ int main(void) {
 
     unsigned char* arena = malloc(256);
     CHECK(arena != NULL);
+#if UINTPTR_MAX > UINT32_MAX
     CHECK((uintptr_t)arena > UINT32_MAX);
+#endif
     HSD_ObjAllocData pool = {0};
     HSD_ObjSetHeap(255, arena + 1);
     HSD_ObjAllocInit(&pool, 17, 16);
@@ -62,21 +69,26 @@ int main(void) {
     HSD_ObjAllocDisableNumLimit(&pool);
     CHECK(HSD_ObjAlloc(&pool) == objects[3]);
     /* Actual game callers request 12-byte Vec storage with 4-byte alignment.
-     * Every free-list slot still needs an aligned 64-bit host pointer. */
+     * Every free-list slot still needs an aligned host pointer. */
+    enum { PTR_ALIGN = _Alignof(void*) };
     HSD_ObjAllocData vectors = {0};
     HSD_ObjSetHeap(255, arena + 1);
     HSD_ObjAllocInit(&vectors, 12, 4);
-    CHECK(vectors.size == 16 && vectors.align == 7);
+    CHECK(vectors.size == ((12 + PTR_ALIGN - 1) & ~(PTR_ALIGN - 1)) && vectors.align == PTR_ALIGN - 1);
     CHECK(HSD_ObjAllocAddFree(&vectors, 8) == 8);
     for (int i = 0; i < 8; ++i) {
         void* vector = HSD_ObjAlloc(&vectors);
-        CHECK(((uintptr_t)vector & 7) == 0);
+        CHECK(((uintptr_t)vector & (PTR_ALIGN - 1)) == 0);
     }
     HSD_ObjSetHeap(255, arena + 1);
     HSD_IDInitAllocData(); HSD_IDSetup();
     CHECK(HSD_ObjAllocAddFree(HSD_IDGetAllocData(), 4) == 4);
     /* Equal low 32 bits must remain distinct, including updates and removal. */
+#if UINTPTR_MAX > UINT32_MAX
     uintptr_t key1 = 0x100000001ULL, key2 = 0x200000001ULL;
+#else
+    uintptr_t key1 = 0x00010001UL, key2 = 0x00020001UL;
+#endif
     int a=1, b=2, c=3, found;
     HSD_IDInsertToTable(NULL,key1,&a); HSD_IDInsertToTable(NULL,key2,&b);
     CHECK(HSD_IDGetData(key1,&found)==&a && found==1);

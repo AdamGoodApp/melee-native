@@ -460,7 +460,13 @@ s32 fn_8001F13C(THPDecComp* streamPlayer)
 #endif
 s32 fn_8001F294(void)
 {
+#ifdef MELEE_NATIVE
+    /* DVD completion callbacks clear this on another host thread; an inlined
+       plain load would be hoisted out of lbMthp_8001F800's wait loop. */
+    return __atomic_load_n(&MoviePlayer.unk_110, __ATOMIC_ACQUIRE);
+#else
     return MoviePlayer.unk_110;
+#endif
 }
 #ifdef __MWERKS__
 #pragma pop

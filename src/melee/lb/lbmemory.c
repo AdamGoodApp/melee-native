@@ -65,13 +65,15 @@ static inline Handle* new_handle(void* arenaLo, void* arenaHi)
     Handle* h;
     HSD_ASSERT(0x7B, _p(free_heap));
 
-    if (((uintptr_t) arenaLo < 0x80000000U) && ((uintptr_t) arenaHi < 0x80000000U)) {
 #ifdef MELEE_NATIVE
+    if (((uintptr_t) arenaLo < MELEE_MAIN_MEMORY_BASE) && ((uintptr_t) arenaHi <= MELEE_MAIN_MEMORY_BASE)) {
         HSD_ASSERT(0x80, (uintptr_t)arenaLo >= (uintptr_t)_p(a_arenaLo) && (uintptr_t)arenaHi <= (uintptr_t)_p(a_arenaHi));
-#else
-        HSD_ASSERT(0x80, (u32)arenaLo >= (u32)_p(a_arenaLo) && (u32)arenaHi <= (u32)_p(a_arenaHi));
-#endif
     }
+#else
+    if (((uintptr_t) arenaLo < 0x80000000U) && ((uintptr_t) arenaHi < 0x80000000U)) {
+        HSD_ASSERT(0x80, (u32)arenaLo >= (u32)_p(a_arenaLo) && (u32)arenaHi <= (u32)_p(a_arenaHi));
+    }
+#endif
 
     POP_HANDLE(&_p(free_heap), h);
     h->x0_next = NULL;
@@ -282,7 +284,11 @@ static void lbMemory_80015320(int arg0, intptr_t _handle, void* arg2,
             *currentp = (void*) ((uintptr_t) handle->x4_lo + (uintptr_t) handle->x8_hi);
             copy_src = null_or_old;
 
+#ifdef MELEE_NATIVE
+            if ((uintptr_t) handle->x4_lo < MELEE_MAIN_MEMORY_BASE) {
+#else
             if ((uintptr_t) handle->x4_lo < 0x80000000U) {
+#endif
                 HSD_DevComRequest(0, (uintptr_t) copy_src, current,
                                   OSRoundUp32B(handle->x8_hi), 0x1B, 1,
                                   lbMemory_80015320, handle->x0_next);

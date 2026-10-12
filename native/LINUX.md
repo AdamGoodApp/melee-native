@@ -26,7 +26,7 @@ ctest --test-dir build/native-linux -L melee --output-on-failure
 ./build/native-linux/melee_native
 ```
 
-Aurora is pinned to `749d6ee7a22bdfab78c8ece9047bca5d79aa72ca`; bootstrap preserves
+Aurora is pinned to `520a3f78142af88cec26dd03baad50e16778203f`; bootstrap preserves
 an existing checkout and rejects an unexpected revision. Dependencies download
 on the first configure, including Aurora's pinned Linux x86-64 Dawn and nod
 packages. Clang is required for the recovered source's compiler extensions.
