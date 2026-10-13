@@ -87,7 +87,10 @@ HSD_Text* HSD_SisLib_803A6754(int font_idx, int context_id)
     text = HSD_SisLib_803A5ACC(font_idx, context_id, 0.0F, 0.0F, 0.0F, 640.0F,
                                480.0F);
 #ifdef MELEE_NATIVE
-    alloc = HSD_SisLib_Alloc(sizeof(SisBlock));
+    /* alloc_data is really sisLib_803A7664_t: a fourth word (xC) follows the
+       SisBlock-shaped prefix. On 64-bit hosts it fits in SisBlock's tail
+       padding; on ILP32 (wasm32) it would overrun into the next heap block. */
+    alloc = HSD_SisLib_Alloc(sizeof(sisLib_803A7664_t));
 #else
     alloc = HSD_SisLib_Alloc(0x10);
 #endif
